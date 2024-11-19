@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bomberos Zapadores</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    h1 {
+      color: red;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 80%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #ddd;
+    }
+
+    .popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      border-radius: 10px;
+      z-index: 1000;
+      display: none;
+    }
+
+    .popup input {
+      margin-bottom: 10px;
+      width: 100%;
+      padding: 8px;
+    }
+
+    .buttons {
+      margin-top: 20px;
+    }
+
+    .buttons button {
+      margin: 5px;
+      padding: 10px 15px;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .buttons button:hover {
+      background-color: #ddd;
+    }
+  </style>
+</head>
+<body>
+  <h1>Bomberos Zapadores</h1>
+
+  <div id="popup" class="popup">
+    <p id="popupMessage">¿Cuál es la causa?</p>
+    <input id="popupInput" type="text" />
+    <button id="popupButton">Aceptar</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Causa</th>
+        <th>Hora</th>
+        <th>Referencia</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="eventList"></tbody>
+  </table>
+
+  <div class="buttons">
+    <button id="newDataButton">Nuevo Dato</button>
+    <button id="downloadExcel">Descargar Excel</button>
+    <button id="clearCache">Limpiar Caché</button>
+  </div>
+
+  <script>
+    const popup = document.getElementById('popup');
+    const popupInput = document.getElementById('popupInput');
+    const popupButton = document.getElementById('popupButton');
+    const popupMessage = document.getElementById('popupMessage');
+    const eventList = document.getElementById('eventList');
+    const newDataButton = document.getElementById('newDataButton');
+    const downloadExcel = document.getElementById('downloadExcel');
+    const clearCache = document.getElementById('clearCache');
+
+    let step = 0;
+    let newEvent = {};
+    const PASSWORD = "YOfonta";
+
+    // Load data from cache
+    const loadData = () => {
+      const data = JSON.parse(localStorage.getItem('events')) || [];
+      data.sort((a, b) => a.hora.localeCompare(b.hora));
+      data.forEach(addEventToTable);
+    };
+
+    // Save data to cache
+    const saveData = () => {
+      const rows = Array.from(eventList.children).map(row => ({
+        causa: row.children[0].textContent,
+        hora: row.children[1].textContent,
+        referencia: row.children[2].textContent,
+      }));
+      rows.sort((a, b) => a.hora.localeCompare(b.hora));
+      localStorage.setItem('events', JSON.stringify(rows));
+      refreshTable(rows);
+    };
+
+    // Add event to table
+    const addEventToTable = ({ causa, hora, referencia }) => {
+      const row = document.createElement('tr');
+
+      row.innerHTML = `
+        <td contenteditable="true">${causa}</td>
+        <td contenteditable="true">${hora}</td>
+        <td contenteditable="true">${referencia}</td>
+        <td>
+          <button onclick="confirmAndDelete(this)">Eliminar</button>
+        </td>
+      `;
+
+      row.addEventListener('input', saveData);
+      eventList.appendChild(row);
+    };
+
+    // Refresh table to ensure sorting order
+    const refreshTable = (rows) => {
+      eventList.innerHTML = '';
+      rows.forEach(addEventToTable);
+    };
+
+    // Handle popup input
+    const handlePopupInput = () => {
+      const inputValue = popupInput.value.trim();
+      if (!inputValue) return;
+
+      if (step === 0) {
+        newEvent.causa = inputValue;
+        popupMessage.textContent = '¿Cuál es la hora?';
+        popupInput.value = '';
+        popupInput.type = 'time';
+      } else if (step === 1) {
+        newEvent.hora = inputValue;
+        popupMessage.textContent = '¿Cuál es la referencia?';
+        popupInput.value = '';
+        popupInput.type = 'text';
+      } else if (step === 2) {
+        newEvent.referencia = inputValue;
+        addEventToTable(newEvent);
+        saveData();
+        popup.style.display = 'none'; // Close popup
+        popupInput.value = '';
+        step = -1;
+      }
+      step++;
+    };
+
+    // Accept Enter key in popup
+    popupInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        handlePopupInput();
+      }
+    });
+
+    popupButton.addEventListener('click', handlePopupInput);
+
+    // Open popup for new data
+    newDataButton.addEventListener('click', () => {
+      step = 0;
+      newEvent = {};
+      popupMessage.textContent = '¿Cuál es la causa?';
+      popupInput.type = 'text';
+      popupInput.value = '';
+      popup.style.display = 'block';
+      popupInput.focus();
+    });
+
+    // Confirm with password and delete row
+    const confirmAndDelete = (button) => {
+      const password = prompt("Ingrese la contraseña para continuar:");
+      if (password === PASSWORD) {
+        const row = button.parentElement.parentElement;
+        eventList.removeChild(row);
+        saveData();
+      } else {
+        alert("Contraseña incorrecta.");
+      }
+    };
+
+    // Confirm with password and clear cache
+    clearCache.addEventListener('click', () => {
+      const password = prompt("Ingrese la contraseña para continuar:");
+      if (password === PASSWORD) {
+        localStorage.removeItem('events');
+        eventList.innerHTML = '';
+      } else {
+        alert("Contraseña incorrecta.");
+      }
+    });
+
+    // Export to Excel
+    downloadExcel.addEventListener('click', () => {
+      const rows = Array.from(eventList.children).map(row => ({
+        Causa: row.children[0].textContent,
+        Hora: row.children[1].textContent,
+        Referencia: row.children[2].textContent,
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+      XLSX.writeFile(wb, 'Bomberos_Zapadores.xlsx');
+    });
+
+    // Initialize
+    loadData();
+  </script>
+</body>
+</html>
