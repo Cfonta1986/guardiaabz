@@ -14,8 +14,8 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      height: 100vh;
+      justify-content: flex-start;
+      padding-top: 20px;
     }
 
     h1 {
@@ -24,19 +24,38 @@
     }
 
     table {
-      width: 80%;
+      width: 90%;
+      max-width: 1000px;
       border-collapse: collapse;
       margin-top: 20px;
+      background-color: white;
+      text-align: left;
     }
 
     th, td {
       border: 1px solid #ccc;
       padding: 10px;
       text-align: left;
+      vertical-align: middle;
     }
 
     th {
-      background-color: #ddd;
+      background-color: #f0f0f0;
+    }
+
+    td:nth-child(1) { /* Causa */
+      width: 30%;
+    }
+    td:nth-child(2) { /* Hora */
+      width: 15%;
+      text-align: center;
+    }
+    td:nth-child(3) { /* Referencia */
+      width: 35%;
+    }
+    td:nth-child(4) { /* Acciones */
+      width: 20%;
+      text-align: center;
     }
 
     .popup {
@@ -50,12 +69,34 @@
       border-radius: 10px;
       z-index: 1000;
       display: none;
+      width: 400px;
+    }
+
+    .popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+
+    .popup-header button {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .popup-header button:hover {
+      color: red;
     }
 
     .popup input {
-      margin-bottom: 10px;
       width: 100%;
-      padding: 8px;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 16px;
+      box-sizing: border-box;
     }
 
     .buttons {
@@ -74,14 +115,40 @@
     .buttons button:hover {
       background-color: #ddd;
     }
+
+    /* Estilo del botón flotante */
+    .floating-button {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background-color: red;
+      color: white;
+      font-size: 24px;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+    }
+
+    .floating-button:hover {
+      background-color: darkred;
+    }
   </style>
 </head>
 <body>
   <h1>Bomberos Zapadores</h1>
 
   <div id="popup" class="popup">
-    <p id="popupMessage">¿Cuál es la causa?</p>
-    <input id="popupInput" type="text" />
+    <div class="popup-header">
+      <span id="popupMessage">¿Cuál es la causa?</span>
+      <button id="closePopup">&times;</button>
+    </div>
+    <input id="popupInput" type="text" autofocus />
     <button id="popupButton">Aceptar</button>
   </div>
 
@@ -98,18 +165,21 @@
   </table>
 
   <div class="buttons">
-    <button id="newDataButton">Nuevo Dato</button>
     <button id="downloadExcel">Descargar Excel</button>
     <button id="clearCache">Limpiar Caché</button>
   </div>
+
+  <!-- Botón flotante -->
+  <button class="floating-button" id="floatingButton">+</button>
 
   <script>
     const popup = document.getElementById('popup');
     const popupInput = document.getElementById('popupInput');
     const popupButton = document.getElementById('popupButton');
     const popupMessage = document.getElementById('popupMessage');
+    const closePopup = document.getElementById('closePopup');
     const eventList = document.getElementById('eventList');
-    const newDataButton = document.getElementById('newDataButton');
+    const floatingButton = document.getElementById('floatingButton');
     const downloadExcel = document.getElementById('downloadExcel');
     const clearCache = document.getElementById('clearCache');
 
@@ -117,29 +187,41 @@
     let newEvent = {};
     const PASSWORD = "YOfonta";
 
-    // Load data from cache
     const loadData = () => {
       const data = JSON.parse(localStorage.getItem('events')) || [];
-      data.sort((a, b) => a.hora.localeCompare(b.hora));
+      data.sort(compareTimes);
       data.forEach(addEventToTable);
     };
 
-    // Save data to cache
     const saveData = () => {
       const rows = Array.from(eventList.children).map(row => ({
         causa: row.children[0].textContent,
         hora: row.children[1].textContent,
         referencia: row.children[2].textContent,
       }));
-      rows.sort((a, b) => a.hora.localeCompare(b.hora));
+      rows.sort(compareTimes);
       localStorage.setItem('events', JSON.stringify(rows));
       refreshTable(rows);
     };
 
-    // Add event to table
+    const compareTimes = (a, b) => {
+      const timeToMinutes = (time) => {
+        const [hours, minutes] = time.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      const aMinutes = timeToMinutes(a.hora);
+      const bMinutes = timeToMinutes(b.hora);
+
+      const shiftStart = 8 * 60;
+      const shiftEnd = 32 * 60;
+
+      const normalize = (minutes) => (minutes < shiftStart ? minutes + 24 * 60 : minutes);
+      return normalize(aMinutes) - normalize(bMinutes);
+    };
+
     const addEventToTable = ({ causa, hora, referencia }) => {
       const row = document.createElement('tr');
-
       row.innerHTML = `
         <td contenteditable="true">${causa}</td>
         <td contenteditable="true">${hora}</td>
@@ -148,18 +230,18 @@
           <button onclick="confirmAndDelete(this)">Eliminar</button>
         </td>
       `;
-
       row.addEventListener('input', saveData);
       eventList.appendChild(row);
+
+      // Scroll automático al agregar un nuevo dato
+      row.scrollIntoView({ behavior: 'smooth' });
     };
 
-    // Refresh table to ensure sorting order
     const refreshTable = (rows) => {
       eventList.innerHTML = '';
       rows.forEach(addEventToTable);
     };
 
-    // Handle popup input
     const handlePopupInput = () => {
       const inputValue = popupInput.value.trim();
       if (!inputValue) return;
@@ -176,38 +258,50 @@
         popupInput.type = 'text';
       } else if (step === 2) {
         newEvent.referencia = inputValue;
-        addEventToTable(newEvent);
+        addEvent(newEvent);
         saveData();
-        popup.style.display = 'none'; // Close popup
-        popupInput.value = '';
-        step = -1;
+        closePopupWindow();
       }
       step++;
     };
 
-    // Accept Enter key in popup
+    const addEvent = (event) => {
+      const events = JSON.parse(localStorage.getItem('events')) || [];
+      events.push(event);
+      events.sort(compareTimes);
+      localStorage.setItem('events', JSON.stringify(events));
+      refreshTable(events);
+    };
+
+    const closePopupWindow = () => {
+      popup.style.display = 'none';
+      popupInput.value = '';
+      step = 0;
+    };
+
     popupInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         handlePopupInput();
+      } else if (e.key === 'Escape') {
+        closePopupWindow();
       }
     });
 
     popupButton.addEventListener('click', handlePopupInput);
+    closePopup.addEventListener('click', closePopupWindow);
 
-    // Open popup for new data
-    newDataButton.addEventListener('click', () => {
+    // Acciones del botón flotante
+    floatingButton.addEventListener('click', () => {
       step = 0;
       newEvent = {};
       popupMessage.textContent = '¿Cuál es la causa?';
       popupInput.type = 'text';
-      popupInput.value = '';
       popup.style.display = 'block';
       popupInput.focus();
     });
 
-    // Confirm with password and delete row
     const confirmAndDelete = (button) => {
-      const password = prompt("Ingrese la contraseña para continuar:");
+      const password = prompt("Ingrese la contraseña para continuar:", "");
       if (password === PASSWORD) {
         const row = button.parentElement.parentElement;
         eventList.removeChild(row);
@@ -217,9 +311,8 @@
       }
     };
 
-    // Confirm with password and clear cache
     clearCache.addEventListener('click', () => {
-      const password = prompt("Ingrese la contraseña para continuar:");
+      const password = prompt("Ingrese la contraseña para continuar:", "");
       if (password === PASSWORD) {
         localStorage.removeItem('events');
         eventList.innerHTML = '';
@@ -228,21 +321,22 @@
       }
     });
 
-    // Export to Excel
     downloadExcel.addEventListener('click', () => {
-      const rows = Array.from(eventList.children).map(row => ({
-        Causa: row.children[0].textContent,
-        Hora: row.children[1].textContent,
-        Referencia: row.children[2].textContent,
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Datos');
-      XLSX.writeFile(wb, 'Bomberos_Zapadores.xlsx');
+      const rows = Array.from(eventList.children).map(row => [
+        row.children[0].textContent,
+        row.children[1].textContent,
+        row.children[2].textContent,
+      ]);
+      const worksheet = XLSX.utils.aoa_to_sheet([
+        ['Causa', 'Hora', 'Referencia'],
+        ...rows,
+      ]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Eventos');
+      XLSX.writeFile(workbook, 'eventos.xlsx');
     });
 
-    // Initialize
+    // Carga inicial de datos
     loadData();
   </script>
 </body>
